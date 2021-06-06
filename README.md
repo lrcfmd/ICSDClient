@@ -33,3 +33,5 @@ search_dict = {"authors": "Rosseinsky",
 search = client.advanced_search(search_dict)
 ret = client.fetch_cifs(search)
 ```
+
+Try to ensure that you log out correctly at the end of the session by calling `client.logout()`. If you are not successfully logged out you will need to wait an hour for the authorization token to expire.
