@@ -172,7 +172,7 @@ class ICSDClient():
 
         params = (
             ('celltype', 'experimental'),
-            ('windowsclient', 'false'),
+            ('windowsclient', self.windows_client),
         )
         
         response = requests.get(f'https://icsd.fiz-karlsruhe.de/ws/cif/{id}', headers=headers, params=params)

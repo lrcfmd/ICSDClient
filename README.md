@@ -40,3 +40,5 @@ ret = client.fetch_cifs(search)
 ```
 
 Try to ensure that you log out correctly at the end of the session by calling `client.logout()`. If you are not successfully logged out you will need to wait an hour for the authorization token to expire.
+
+A session history of all server responses can be found in `client.session_history`.
