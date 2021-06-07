@@ -16,10 +16,15 @@ cif_file = client.fetch_cif(1)
 cif_files = client.fetch_cifs([1, 2, 3])
 ```
 
-A search of the ICSD can be performed and the resultant search results retrieved
+A search of the ICSD can be performed and which will return the resultant ICSD IDs, with their associated compositions
 
 ```python
 search = client.search("LiCl")
+```
+
+Once a search has been performed these can be passed to `fetch_cifs()` for bulk download.
+
+```python
 ret = client.fetch_cifs(search)
 ```
 

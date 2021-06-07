@@ -3,7 +3,7 @@ import requests
 import numpy as np 
 
 def main():
-    client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
+    client = ICSDClient("YOUR_USERNNAME", "YOUR_PASSWORD")
     
     search = client.search("LiCl")
     ret = client.fetch_cifs(search)
@@ -97,7 +97,7 @@ class ICSDClient():
         
         return list(zip(search_results, compositions))
 
-    def advanced_search(self, search_dict, search_type="and"):
+    def advanced_search(self, search_dict, search_type="and", property="StructuredFormula"):
         for k, v in search_dict.items():
             if k not in self.search_dict:
                 return f"Invalid search term {k} in search dict. Call client.search_dict.keys() to see available search terms"
@@ -123,17 +123,24 @@ class ICSDClient():
 
         search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
 
-        compositions = self.fetch_compositions(search_results)
+        properties = self.fetch_data(search_results, property=property)
         
-        return list(zip(search_results, compositions))
+        return list(zip(search_results, properties))
 
-    def fetch_compositions(self, ids):
-        # if len(ids) > 500:
-        #     chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
-        #     return_responses = ''.join([x for chunk in chunked_ids for x in self.fetch_data(chunk)])
-        #     cifs = re.split("#End of TTdata_[0-9]*-ICSD", return_responses)
+    def fetch_data(self, ids, property="StructuredFormula"):
+        """
+        Available properties: CollectionCode, HMS, StructuredFormula, StructureType, 
+        Title, Authors, Reference, CellParameter, ReducedCellParameter, StandardizedCellParameter, 
+        CellVolume, FormulaUnitsPerCell, FormulaWeight, Temperature, Pressure, RValue, 
+        SumFormula, ANXFormula, ABFormula, ChemicalName, MineralName, MineralGroup, 
+        CalculatedDensity, MeasuredDensity, PearsonSymbol, WyckoffSequence, Journal, 
+        Volume, PublicationYear, Page, Quality
+        """
+        if len(ids) > 500:
+            chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
+            return_responses = [x for chunk in chunked_ids for x in self.fetch_data(chunk)]
 
-        #     return cifs
+            return return_responses
 
         headers = {
             'accept': 'application/csv',
@@ -143,7 +150,7 @@ class ICSDClient():
         params = (
             ('idnum', ids),
             ('windowsclient', self.windows_client),
-            ('listSelection', 'StructuredFormula'),
+            ('listSelection', property),
         )
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/csv', headers=headers, params=params)
@@ -178,6 +185,9 @@ class ICSDClient():
         if self.auth_token is None:
             print("You are not authenticated, call client.authorize() first")
             return 
+
+        if isinstance(ids[0], tuple):
+            ids = [x[0] for x in ids]
 
         if len(ids) > 500:
             chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
