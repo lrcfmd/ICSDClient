@@ -93,7 +93,9 @@ class ICSDClient():
 
         search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
         
-        return search_results
+        compositions = self.fetch_compositions(search_results)
+        
+        return list(zip(search_results, compositions))
 
     def advanced_search(self, search_dict, search_type="and"):
         for k, v in search_dict.items():
@@ -120,8 +122,35 @@ class ICSDClient():
         self.session_history.append(response)
 
         search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
+
+        compositions = self.fetch_compositions(search_results)
         
-        return search_results
+        return list(zip(search_results, compositions))
+
+    def fetch_compositions(self, ids):
+        # if len(ids) > 500:
+        #     chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
+        #     return_responses = ''.join([x for chunk in chunked_ids for x in self.fetch_data(chunk)])
+        #     cifs = re.split("#End of TTdata_[0-9]*-ICSD", return_responses)
+
+        #     return cifs
+
+        headers = {
+            'accept': 'application/csv',
+            'ICSD-Auth-Token': self.auth_token,
+        }
+
+        params = (
+            ('idnum', ids),
+            ('windowsclient', self.windows_client),
+            ('listSelection', 'StructuredFormula'),
+        )
+
+        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/csv', headers=headers, params=params)
+
+        compositions = str(response.content).split("\\t\\r\\n")[1:-1]
+
+        return compositions
 
 
     def fetch_cif(self, id):
