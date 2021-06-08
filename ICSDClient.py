@@ -3,13 +3,15 @@ import requests
 import numpy as np 
 
 def main():
-    client = ICSDClient("YOUR_USERNNAME", "YOUR_PASSWORD")
+    client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
     
     search = client.search("LiCl")
-    ret = client.fetch_cifs(search)
+    ret = client.fetch_cif(718)
 
-    search = client.advanced_search({"authors": "Matthew Dyer"})
-    ret = client.fetch_cifs(search)
+    search = client.advanced_search({"authors": "Rosseinsky",
+                                    "chemicalname" : "O",
+                                    "numberofelements": 3})
+    cifs = client.fetch_cifs(search)
 
     client.logout()
     print()
@@ -93,7 +95,7 @@ class ICSDClient():
 
         search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
         
-        compositions = self.fetch_compositions(search_results)
+        compositions = self.fetch_data(search_results)
         
         return list(zip(search_results, compositions))
 
@@ -138,9 +140,10 @@ class ICSDClient():
         """
         if len(ids) > 500:
             chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
-            return_responses = [x for chunk in chunked_ids for x in self.fetch_data(chunk)]
+            return_responses = [self.fetch_data(chunk) for chunk in chunked_ids]
+            flattened = [item for sublist in return_responses for item in sublist]
 
-            return return_responses
+            return flattened
 
         headers = {
             'accept': 'application/csv',
