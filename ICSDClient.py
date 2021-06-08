@@ -31,7 +31,7 @@ class ICSDClient():
     def __del__(self):
         self.logout()
 
-    def authorize(self):
+    def authorize(self, verbose=True):
         data = {"loginid": self.login_id,
                 "password": self.password}
 
@@ -46,22 +46,22 @@ class ICSDClient():
 
         if response.status_code == 200:
             self.auth_token = response.headers['ICSD-Auth-Token']
-            print(f"Authentication succeeded. Your Auth Token for this session is {self.auth_token} which will expire in one hour. Please remember to call client.logout() when you have finished.")
+            if verbose: print(f"Authentication succeeded. Your Auth Token for this session is {self.auth_token} which will expire in one hour. Please remember to call client.logout() when you have finished.")
         else:
-            print(response.content)
+            if verbose: print(response.content)
         
         self.session_history.append(response)
 
         return response
 
-    def logout(self):
+    def logout(self, verbose=True):
         headers = {
             'accept': 'text/plain',
             'ICSD-Auth-Token': self.auth_token,
         }
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/auth/logout', headers=headers)
-        print(response.content)
+        if verbose: print(response.content)
 
         self.session_history.append(response)
 
@@ -148,8 +148,8 @@ class ICSDClient():
                 return_responses.append(self.fetch_data(chunk))
                 
                 if i % 2 == 0:
-                    self.logout()
-                    self.authorize()
+                    self.logout(verbose=False)
+                    self.authorize(verbose=False)
 
             flattened = [item for sublist in return_responses for item in sublist]
 
@@ -211,8 +211,8 @@ class ICSDClient():
                 return_responses.append(self.fetch_data(chunk))
                 
                 if i % 2 == 0:
-                    self.logout()
-                    self.authorize()
+                    self.logout(verbose=False)
+                    self.authorize(verbose=False)
 
             flattened = [item for sublist in return_responses for item in sublist]
 
