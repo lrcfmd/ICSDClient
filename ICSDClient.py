@@ -24,14 +24,16 @@ class ICSDClient():
         self.search_dict = self.load_search_dict()
         
         if login_id is not None:
-            self.authorize(login_id, password)
+            self.login_id = login_id
+            self.password = password
+            self.authorize()
 
     def __del__(self):
         self.logout()
 
-    def authorize(self, login_id, password):
-        data = {"loginid": login_id,
-                "password": password}
+    def authorize(self):
+        data = {"loginid": self.login_id,
+                "password": self.password}
 
         headers = {
             'accept': 'text/plain',
@@ -140,7 +142,15 @@ class ICSDClient():
         """
         if len(ids) > 500:
             chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
-            return_responses = [self.fetch_data(chunk) for chunk in chunked_ids]
+
+            return_responses = []
+            for i, chunk in enumerate(chunked_ids):
+                return_responses.append(self.fetch_data(chunk))
+                
+                if i % 2 == 0:
+                    self.logout()
+                    self.authorize()
+
             flattened = [item for sublist in return_responses for item in sublist]
 
             return flattened
@@ -194,7 +204,19 @@ class ICSDClient():
 
         if len(ids) > 500:
             chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
-            return_responses = ''.join([x for chunk in chunked_ids for x in self.fetch_cifs(chunk)])
+            chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
+
+            return_responses = []
+            for i, chunk in enumerate(chunked_ids):
+                return_responses.append(self.fetch_data(chunk))
+                
+                if i % 2 == 0:
+                    self.logout()
+                    self.authorize()
+
+            flattened = [item for sublist in return_responses for item in sublist]
+
+            return_responses = ''.join(flattened)
             cifs = re.split("#End of TTdata_[0-9]*-ICSD", return_responses)
 
             return cifs
