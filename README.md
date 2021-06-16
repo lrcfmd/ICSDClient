@@ -1,5 +1,5 @@
 # ICSDClient
-A python interface for accessing the ICSD API Client with the requests library. Please visit the [Fitz-Kahrule website](https://icsd.fiz-karlsruhe.de/index.xhtml) for further details on accessing the API. 
+A python interface for accessing the ICSD API Client with the requests library. Please visit the [Fitz-Karlsruhe website](https://icsd.fiz-karlsruhe.de/index.xhtml) for further details on accessing the API. 
 
 ## Basic Usage 
 
