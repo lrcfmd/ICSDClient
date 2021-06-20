@@ -1,5 +1,5 @@
 # ICSDClient
-A python interface for accessing the ICSD API Client with the requests library. Please visit the [Fitz-Kahrule website](https://icsd.fiz-karlsruhe.de/index.xhtml) for further details on accessing the API. 
+A python interface for accessing the ICSD API Client with the requests library. Please visit the [Fitz-Karlsruhe website](https://icsd.fiz-karlsruhe.de/index.xhtml) for further details on accessing the API. 
 
 ## Basic Usage 
 
@@ -25,10 +25,10 @@ search = client.search("LiCl")
 Once a search has been performed these can be passed to `fetch_cifs()` for bulk download.
 
 ```python
-ret = client.fetch_cifs(search)
+cifs = client.fetch_cifs(search)
 ```
 
-More advanced searches can be performed with a search dictionary. All available search fields can be viewed with `client.search_dict.keys()`. The default search type is AND however this can be changed to OR with `advanced_search(search_type="or")`. Please be aware that the maximum download limit is 20,000 cifs, after downloading these your account will be locked.
+More advanced searches can be performed with a search dictionary. All available search fields can be viewed with `client.search_dict.keys()`. The default search type is AND however this can be changed to OR with `advanced_search(search_type="or")`. 
 
 ```python
 search_dict = {"authors": "Rosseinsky",
@@ -36,9 +36,9 @@ search_dict = {"authors": "Rosseinsky",
                "numberofelements": 3}
 
 search = client.advanced_search(search_dict)
-ret = client.fetch_cifs(search)
+cifs = client.fetch_cifs(search)
 ```
 
 Try to ensure that you log out correctly at the end of the session by calling `client.logout()`. If you are not successfully logged out you will need to wait an hour for the authorization token to expire.
 
-A session history of all server responses can be found in `client.session_history`.
+A session history of all server responses can be found in `client.session_history`, make sure to save any large searches.
