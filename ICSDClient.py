@@ -8,9 +8,6 @@ def main():
     search = client.search("LiCl")
     ret = client.fetch_cif(718)
 
-    search = client.advanced_search({"authors": "Rosseinsky",
-                                    "chemicalname" : "O",
-                                    "numberofelements": 3})
     cifs = client.fetch_cifs(search)
 
     client.logout()
@@ -168,9 +165,9 @@ class ICSDClient():
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/csv', headers=headers, params=params)
 
-        compositions = str(response.content).split("\\t\\r\\n")[1:-1]
+        data = str(response.content).split("\\t\\r\\n")[1:-1]
 
-        return compositions
+        return data
 
 
     def fetch_cif(self, id):
@@ -204,11 +201,10 @@ class ICSDClient():
 
         if len(ids) > 500:
             chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
-            chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
-
             return_responses = []
+
             for i, chunk in enumerate(chunked_ids):
-                return_responses.append(self.fetch_data(chunk))
+                return_responses.append(self.fetch_cifs(chunk))
                 
                 if i % 2 == 0:
                     self.logout(verbose=False)
@@ -217,7 +213,8 @@ class ICSDClient():
             flattened = [item for sublist in return_responses for item in sublist]
 
             return_responses = ''.join(flattened)
-            cifs = re.split("#End of TTdata_[0-9]*-ICSD", return_responses)
+            cifs = re.split("\(C\) 2021 by FIZ Karlsruhe", return_responses)[1:]
+            cifs = ["(C) 2021 by FIZ Karlsruhe" + x for x in cifs]
 
             return cifs
 
@@ -235,8 +232,9 @@ class ICSDClient():
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/cif/multiple', headers=headers, params=params)
 
-        cifs = re.split("#End of TTdata_[0-9]*-ICSD", str(response.content))
-
+        cifs = re.split("\(C\) 2021 by FIZ Karlsruhe", str(response.content))[1:]
+        cifs = ["(C) 2021 by FIZ Karlsruhe" + x for x in cifs]
+            
         return cifs
 
     def load_search_dict(self):
