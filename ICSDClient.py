@@ -14,10 +14,10 @@ def main():
     print()
 
 class ICSDClient():
-    def __init__(self, login_id=None, password=None):
+    def __init__(self, login_id=None, password=None, windows_client=True):
         self.auth_token = None 
         self.session_history = []
-        self.windows_client = True
+        self.windows_client = windows_client
         self.search_dict = self.load_search_dict()
         
         if login_id is not None:
