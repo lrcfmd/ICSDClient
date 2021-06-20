@@ -204,12 +204,12 @@ class ICSDClient():
             return_responses = []
 
             for i, chunk in enumerate(chunked_ids):
-                return_responses.append(self.fetch_cifs(chunk))
-                
                 if i % 2 == 0:
                     self.logout(verbose=False)
                     self.authorize(verbose=False)
 
+                return_responses.append(self.fetch_cifs(chunk))
+                
             flattened = [item for sublist in return_responses for item in sublist]
 
             return_responses = ''.join(flattened)
