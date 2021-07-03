@@ -28,11 +28,18 @@ Once a search has been performed these can be passed to `fetch_cifs()` for bulk 
 cifs = client.fetch_cifs(search)
 ```
 
+These can be written to `.cif` files using the `writeout()` method. These will be saved to the `./cifs/` folder by default, but this can be changed via the `folder` parameter.
+
+```python
+client.writeout(cifs)
+client.writeout(cifs, folder="/YOUR/STORAGE/PATH")
+```
+
 More advanced searches can be performed with a search dictionary. All available search fields can be viewed with `client.search_dict.keys()`. The default search type is AND however this can be changed to OR with `advanced_search(search_type="or")`. 
 
 ```python
 search_dict = {"authors": "Rosseinsky",
-               "chemicalname" : "O",
+               "composition" : "O",
                "numberofelements": 3}
 
 search = client.advanced_search(search_dict)

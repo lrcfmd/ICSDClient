@@ -1,3 +1,4 @@
+import os
 import re
 import requests 
 import numpy as np 
@@ -5,20 +6,24 @@ import numpy as np
 def main():
     client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
     
-    search = client.search("LiCl")
-    ret = client.fetch_cif(718)
+    cif = client.fetch_cif(1)
+    client.writeout(cif)
 
+    search_dict = {"composition": "Li"}
+
+    search = client.advanced_search(search_dict)
     cifs = client.fetch_cifs(search)
+    client.writeout(cifs)
 
     client.logout()
-    print()
 
 class ICSDClient():
-    def __init__(self, login_id=None, password=None, windows_client=True):
+    def __init__(self, login_id=None, password=None, windows_client=False, timeout=15):
         self.auth_token = None 
         self.session_history = []
         self.windows_client = windows_client
         self.search_dict = self.load_search_dict()
+        self.timeout = timeout
         
         if login_id is not None:
             self.login_id = login_id
@@ -64,6 +69,25 @@ class ICSDClient():
 
         return response
 
+    def writeout(self, cifs, folder="./cifs/"):
+        if not os.path.exists(folder):
+            os.makedirs(folder)
+
+        if not isinstance(cifs, list):
+            if cifs is None:
+                print("Requires a valid cif string, this string is None. Ensure download was successful")
+                return 
+                
+            cifs = [cifs]
+        
+        for cif in cifs:
+            icsd_code = re.search(r"_database_code_ICSD ([0-9]+)", cif).group(1)
+            filename = f"icsd_{int(icsd_code):06}.cif"
+
+            with open(os.path.join(folder, filename), "w") as f:
+                for line in cif.splitlines():
+                    f.write(line + "\n")
+
     def search(self, searchTerm, content_type=None):
         '''
         Available content EXPERIMENTAL_INORGANIC, EXPERIMENTAL_METALORGANIC, THERORETICAL_STRUCTURES
@@ -75,12 +99,13 @@ class ICSDClient():
         if content_type is None:
             params = (
                 ('query', searchTerm),
+                ('content type', "THERORETICAL_STRUCTURES"),
             )
 
         else: 
             params = (
                 ('query', 'LiCl'),
-                ('content type', content_type),
+                ('content type', "THERORETICAL_STRUCTURES"),
             )
 
         headers = {
@@ -88,7 +113,10 @@ class ICSDClient():
             'ICSD-Auth-Token': self.auth_token,
         }
 
-        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/search/simple', headers=headers, params=params)
+        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/search/simple', 
+                                headers=headers, 
+                                params=params,
+                                timeout=self.timeout)
 
         self.session_history.append(response)
 
@@ -108,9 +136,9 @@ class ICSDClient():
 
         search_string = f" {search_type} ".join([f"{str(k)} : {str(v)}" for k, v in search_dict.items()])
 
-        
         params = (
             ('query', search_string),
+            ('content type', "EXPERIMENTAL_INORGANIC"),
         )
 
         headers = {
@@ -118,7 +146,12 @@ class ICSDClient():
             'ICSD-Auth-Token': self.auth_token,
         }
 
-        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/search/expert', headers=headers, params=params)
+        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/search/expert', 
+                                headers=headers, 
+                                params=params,
+                                timeout=self.timeout)
+
+        # TODO add exception handling for timeouts 
 
         self.session_history.append(response)
 
@@ -189,7 +222,7 @@ class ICSDClient():
         
         self.session_history.append(response)
 
-        return response.content
+        return response.content.decode("UTF-8").strip()
 
     def fetch_cifs(self, ids):
         if self.auth_token is None:
@@ -213,8 +246,10 @@ class ICSDClient():
             flattened = [item for sublist in return_responses for item in sublist]
 
             return_responses = ''.join(flattened)
+
             cifs = re.split("\(C\) 2021 by FIZ Karlsruhe", return_responses)[1:]
             cifs = ["(C) 2021 by FIZ Karlsruhe" + x for x in cifs]
+            cifs = [x.encode("UTF-8") for x in cifs]
 
             return cifs
 
@@ -232,7 +267,7 @@ class ICSDClient():
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/cif/multiple', headers=headers, params=params)
 
-        cifs = re.split("\(C\) 2021 by FIZ Karlsruhe", str(response.content))[1:]
+        cifs = re.split("\(C\) 2021 by FIZ Karlsruhe", response.content.decode("UTF-8"))[1:]
         cifs = ["(C) 2021 by FIZ Karlsruhe" + x for x in cifs]
             
         return cifs
