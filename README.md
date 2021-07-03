@@ -16,10 +16,10 @@ cif_file = client.fetch_cif(1)
 cif_files = client.fetch_cifs([1, 2, 3])
 ```
 
-A search of the ICSD can be performed and which will return the resultant ICSD IDs, with their associated compositions
+A search of all ICSD fields can be performed, which will return the resultant ICSD IDs, with their associated compositions
 
 ```python
-search = client.search("LiCl")
+search = client.search("Na")
 ```
 
 Once a search has been performed these can be passed to `fetch_cifs()` for bulk download.
@@ -38,9 +38,7 @@ client.writeout(cifs, folder="/YOUR/STORAGE/PATH")
 More advanced searches can be performed with a search dictionary. All available search fields can be viewed with `client.search_dict.keys()`. The default search type is AND however this can be changed to OR with `advanced_search(search_type="or")`. 
 
 ```python
-search_dict = {"authors": "Rosseinsky",
-               "composition" : "O",
-               "numberofelements": 3}
+search_dict = {"composition": "Li"}
 
 search = client.advanced_search(search_dict)
 cifs = client.fetch_cifs(search)
