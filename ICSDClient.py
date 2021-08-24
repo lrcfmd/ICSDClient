@@ -99,13 +99,13 @@ class ICSDClient():
         if content_type is None:
             params = (
                 ('query', searchTerm),
-                ('content type', "THERORETICAL_STRUCTURES"),
+                ('content type', "EXPERIMENTAL_INORGANIC"),
             )
 
         else: 
             params = (
                 ('query', 'LiCl'),
-                ('content type', "THERORETICAL_STRUCTURES"),
+                ('content type', "EXPERIMENTAL_INORGANIC"),
             )
 
         headers = {
