@@ -3,12 +3,15 @@ import re
 import requests 
 import numpy as np 
 from bs4 import BeautifulSoup
+import time 
 
 def main():
     client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
     
     # cif = client.fetch_cif(1)
     # client.writeout(cif)
+
+    
 
     search_dict = {"collectioncode": "1-100"}
 
@@ -119,7 +122,7 @@ class ICSDClient():
                                 params=params,
                                 timeout=self.timeout)
 
-        self.session_history.append(response)
+        self.session_history.append({searchTerm: response})
 
         search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
         
@@ -154,7 +157,7 @@ class ICSDClient():
 
         # TODO add exception handling for timeouts 
 
-        self.session_history.append(response)
+        self.session_history.append({search_string: response})
 
         soup = BeautifulSoup(response.content, "html.parser")
         search_results = soup.idnums.contents[0].split(" ")
@@ -206,6 +209,8 @@ class ICSDClient():
         if len(data) == 0 and len(ids) != 0:
             data = str(response.content).split("\\t\\r\\n")[1:-1]
 
+        self.session_history.append({str(ids): data})
+
         return data
 
 
@@ -226,7 +231,7 @@ class ICSDClient():
         
         response = requests.get(f'https://icsd.fiz-karlsruhe.de/ws/cif/{id}', headers=headers, params=params)
         
-        self.session_history.append(response)
+        self.session_history.append({id: response})
 
         return response.content.decode("UTF-8").strip()
 
@@ -281,6 +286,25 @@ class ICSDClient():
         cifs = ["(C) 2021 by FIZ Karlsruhe" + x for x in cifs]
             
         return cifs
+
+    def fetch_all_cifs(self, cif_path="./cifs/"):
+        for x in range(0, 1000000, 500):
+            self.logout(verbose=False)
+            self.authorize(verbose=False)
+
+            print(f"{x}-{x+499}")
+            search_res = self.advanced_search({"collectioncode": f"{x}-{x+499}"})
+
+            cifs = self.fetch_cifs(search_res)
+
+            try:
+                print(cifs[0])
+                print(cifs[-1])
+            except:
+                print("\n\nNO CIFS RETURNED, LAST RESPONSE:\n")
+                print(self.session_history[-1].content)
+                
+            self.writeout(cifs, cif_path)
 
     def load_search_dict(self):
         search_dict = {"AUTHORS" : None, # BIBLIOGRAPHY : Authors name for the main (first) reference Text
