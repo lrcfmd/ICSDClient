@@ -2,14 +2,15 @@ import os
 import re
 import requests 
 import numpy as np 
+from bs4 import BeautifulSoup
 
 def main():
     client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
     
-    cif = client.fetch_cif(1)
-    client.writeout(cif)
+    # cif = client.fetch_cif(1)
+    # client.writeout(cif)
 
-    search_dict = {"composition": "Li"}
+    search_dict = {"collectioncode": "1-100"}
 
     search = client.advanced_search(search_dict)
     cifs = client.fetch_cifs(search)
@@ -24,7 +25,7 @@ class ICSDClient():
         self.windows_client = windows_client
         self.search_dict = self.load_search_dict()
         self.timeout = timeout
-        
+
         if login_id is not None:
             self.login_id = login_id
             self.password = password
@@ -99,13 +100,13 @@ class ICSDClient():
         if content_type is None:
             params = (
                 ('query', searchTerm),
-                ('content type', "EXPERIMENTAL_INORGANIC"),
+                ('content type', "THERORETICAL_STRUCTURES"),
             )
 
         else: 
             params = (
                 ('query', 'LiCl'),
-                ('content type', "EXPERIMENTAL_INORGANIC"),
+                ('content type', "THERORETICAL_STRUCTURES"),
             )
 
         headers = {
@@ -155,7 +156,9 @@ class ICSDClient():
 
         self.session_history.append(response)
 
-        search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
+        soup = BeautifulSoup(response.content, "html.parser")
+        search_results = soup.idnums.contents[0].split(" ")
+        # search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
 
         properties = self.fetch_data(search_results, property=property)
         
@@ -198,7 +201,10 @@ class ICSDClient():
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/csv', headers=headers, params=params)
 
-        data = str(response.content).split("\\t\\r\\n")[1:-1]
+        data = str(response.content).split("\\t\\n")[1:-1]
+
+        if len(data) == 0 and len(ids) != 0:
+            data = str(response.content).split("\\t\\r\\n")[1:-1]
 
         return data
 
@@ -228,11 +234,11 @@ class ICSDClient():
         if self.auth_token is None:
             print("You are not authenticated, call client.authorize() first")
             return 
-        
+
         if bool(ids) is False:
             print("Must have a non empty list of cifs to search")
             return
-        
+
         if isinstance(ids[0], tuple):
             ids = [x[0] for x in ids]
 
@@ -289,7 +295,7 @@ class ICSDClient():
                 "CALCDENSITY" : None, #  CELL SEARCH : Calculated density Numerical, floating poit
                 "CELLPARAMETERS" : None, #  CELL SEARCH : Cell lenght a,b,c and angles alpha, beta, gamma separated by whitespace, i.e.: a b c alpha beta gamma, * if any value Numerical, floating point
                 "SEARCH" : None, #  CELLDATACELL SEARCH : Restriction of cellparameters.experimental, reduced, standardized
-                "STRUCTUREDFORMUL" : None, # A CHEMISTRY SEARCH : Search for typical chemical groups Text
+                "STRUCTUREDFORMULA" : None, # A CHEMISTRY SEARCH : Search for typical chemical groups Text
                 "CHEMICALNAME" : None, #  CHEMISTRY SEARCH : Search for (parts of) the chemical name Text
                 "MINERALNAME" : None, #  CHEMISTRY SEARCH : Search for the mineral name Text
                 "MINERALGROUP" : None, #  CHEMISTRY SEARCH : Search for the mineral group Text
