@@ -47,3 +47,10 @@ cifs = client.fetch_cifs(search)
 Try to ensure that you log out correctly at the end of the session by calling `client.logout()`. If you are not successfully logged out you will need to wait an hour for the authorization token to expire.
 
 A session history of all server responses can be found in `client.session_history`, make sure to save any large searches.
+
+To download the latest version of all cifs in the ICSD, the `fetch_all_cifs()` method can be used. Please ensure that your API access will support a large number of downloads as this may exceed your limit. Cifs will be saved to `./cifs/` by default, although this can be changed via the `cif_path` attribute.
+
+```python
+client.fetch_all_cifs()
+client.fetch_all_cifs(cif_path='/YOUR/CIF/PATH')
+```
