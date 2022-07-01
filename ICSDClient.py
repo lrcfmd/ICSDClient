@@ -240,10 +240,6 @@ class ICSDClient():
             print("You are not authenticated, call client.authorize() first")
             return 
 
-        if bool(ids) is False:
-            print("Must have a non empty list of cifs to search")
-            return
-
         if isinstance(ids[0], tuple):
             ids = [x[0] for x in ids]
 
