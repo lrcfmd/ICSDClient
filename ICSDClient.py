@@ -1,22 +1,27 @@
 import os
 import re
-import requests 
 import numpy as np 
+import datetime 
+
+import requests 
 from bs4 import BeautifulSoup
-import time 
 
 def main():
     client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
-    
-    # cif = client.fetch_cif(1)
-    # client.writeout(cif)
-
-    
 
     search_dict = {"collectioncode": "1-100"}
 
     search = client.advanced_search(search_dict)
     cifs = client.fetch_cifs(search)
+
+    x = client.search("Li O")
+    cifs = client.fetch_cifs(search)
+
+    # client.fetch_all_cifs()
+    
+    # cif = client.fetch_cif(1)
+    # client.writeout(cif)
+
     client.writeout(cifs)
 
     client.logout()
@@ -130,7 +135,7 @@ class ICSDClient():
         
         return list(zip(search_results, compositions))
 
-    def advanced_search(self, search_dict, search_type="and", property="StructuredFormula"):
+    def advanced_search(self, search_dict, search_type="and",  property_list=["CollectionCode", "StructuredFormula"]):
         for k, v in search_dict.items():
             if k not in self.search_dict:
                 return f"Invalid search term {k} in search dict. Call client.search_dict.keys() to see available search terms"
@@ -163,11 +168,11 @@ class ICSDClient():
         search_results = soup.idnums.contents[0].split(" ")
         # search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
 
-        properties = self.fetch_data(search_results, property=property)
+        properties = self.fetch_data(search_results, property_list=property_list)
         
         return list(zip(search_results, properties))
 
-    def fetch_data(self, ids, property="StructuredFormula"):
+    def fetch_data(self, ids, property_list=["CollectionCode", "StructuredFormula"]):
         """
         Available properties: CollectionCode, HMS, StructuredFormula, StructureType, 
         Title, Authors, Reference, CellParameter, ReducedCellParameter, StandardizedCellParameter, 
@@ -199,20 +204,23 @@ class ICSDClient():
         params = (
             ('idnum', ids),
             ('windowsclient', self.windows_client),
-            ('listSelection', property),
+            ('listSelection', property_list),
         )
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/csv', headers=headers, params=params)
 
         data = str(response.content).split("\\t\\n")[1:-1]
 
+        # If there's only a single response
         if len(data) == 0 and len(ids) != 0:
             data = str(response.content).split("\\t\\r\\n")[1:-1]
+
+        if len(property_list) > 1:
+            data = [x.split("\\t") for x in data]
 
         self.session_history.append({str(ids): data})
 
         return data
-
 
     def fetch_cif(self, id):
         if self.auth_token is None:
@@ -259,7 +267,7 @@ class ICSDClient():
             return_responses = ''.join(flattened)
 
             cifs = re.split("\(C\) 2021 by FIZ Karlsruhe", return_responses)[1:]
-            cifs = ["(C) 2021 by FIZ Karlsruhe" + x for x in cifs]
+            cifs = [f'(C) {datetime.date.today().strftime("%Y")} by FIZ Karlsruhe' + x for x in cifs]
             cifs = [x.encode("UTF-8") for x in cifs]
 
             return cifs
@@ -278,8 +286,8 @@ class ICSDClient():
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/cif/multiple', headers=headers, params=params)
 
-        cifs = re.split("\(C\) 2021 by FIZ Karlsruhe", response.content.decode("UTF-8"))[1:]
-        cifs = ["(C) 2021 by FIZ Karlsruhe" + x for x in cifs]
+        cifs = re.split("\\(C\\) [0-9]{4} by FIZ Karlsruhe", response.content.decode("UTF-8"))[1:]
+        cifs = [f"(C) 2022 by FIZ Karlsruhe" + x for x in cifs]
             
         return cifs
 
