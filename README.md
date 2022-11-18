@@ -1,8 +1,6 @@
 # ICSDClient
 A python interface for accessing the ICSD API Client with the requests library. Please visit the [Fitz-Karlsruhe website](https://icsd.fiz-karlsruhe.de/index.xhtml) for further details on accessing the API. 
 
-Note that the ICSD internal database ID for each cif file is not the same as the ICSD collection code. A search must first be performed for a collection code (or list of collection codes) and then retrieved using the resultant IDs.
-
 ## Setup
 
 Clone the repository to a local directory and install the dependencies (recommendation is inside a python virtual environment)
@@ -27,6 +25,8 @@ Once this has authenticated successfully you can use this client to poll the ICS
 cif_file = client.fetch_cif(1)
 cif_files = client.fetch_cifs([1, 2, 3])
 ```
+
+Note that the ICSD internal database ID for each cif file is not the same as the ICSD collection code. A search must first be performed for a collection code (or list of collection codes) and then retrieved using the resultant IDs.
 
 To download the latest version of all cifs in the ICSD, the `fetch_all_cifs()` method can be used. Please ensure that your API access will support this many downloads as this may exceed your limit. The authors take no responsibility for incorrect applications of this tool. Cifs will be saved to `./cifs/` by default, although this can be changed via the `cif_path` attribute.
 
