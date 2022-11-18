@@ -18,6 +18,13 @@ cif_file = client.fetch_cif(1)
 cif_files = client.fetch_cifs([1, 2, 3])
 ```
 
+To download the latest version of all cifs in the ICSD, the `fetch_all_cifs()` method can be used. Please ensure that your API access will support this many downloads as this may exceed your limit. The authors take no responsibility for incorrect applications of this tool. Cifs will be saved to `./cifs/` by default, although this can be changed via the `cif_path` attribute.
+
+```python
+client.fetch_all_cifs()
+client.fetch_all_cifs(cif_path='/YOUR/CIF/PATH')
+```
+
 A search of all ICSD fields can be performed, which will return the resultant ICSD IDs, with their associated compositions
 
 ```python
@@ -40,19 +47,22 @@ client.writeout(cifs, folder="/YOUR/STORAGE/PATH")
 More advanced searches can be performed with a search dictionary. All available search fields can be viewed with `client.search_dict.keys()`. The default search type is AND however this can be changed to OR with `advanced_search(search_type="or")`. 
 
 ```python
-search_dict = {"composition": "Li"}
+search_dict = {"composition": "O",
+               "collectioncode": "1-100"}
 
 search = client.advanced_search(search_dict)
 cifs = client.fetch_cifs(search)
 ```
 
+Certain properties may be retrieved from the search without downloading a cif file through the `property_list` parameter. By default `property_list=["CollectionCode", "StructuredFormula"]`.
+
+```python
+search = client.advanced_search(search_dict, property_list=["CollectionCode", "StructuredFormula", "HMS", "CalculatedDensity"])
+print(search)
+```
+
+Stored properties: CollectionCode, HMS, StructuredFormula, StructureType, Title, Authors, Reference, CellParameter, ReducedCellParameter, StandardizedCellParameter,, CellVolume, FormulaUnitsPerCell, FormulaWeight, Temperature, Pressure, RValue, SumFormula, ANXFormula, ABFormula, ChemicalName, MineralName, MineralGroup, CalculatedDensity, MeasuredDensity, PearsonSymbol, WyckoffSequence, Journal, Volume, PublicationYear, Page, Quality
+
 Try to ensure that you log out correctly at the end of the session by calling `client.logout()`. If you are not successfully logged out you will need to wait an hour for the authorization token to expire.
 
 A session history of all server responses can be found in `client.session_history`, make sure to save any large searches.
-
-To download the latest version of all cifs in the ICSD, the `fetch_all_cifs()` method can be used. Please ensure that your API access will support a large number of downloads as this may exceed your limit. Cifs will be saved to `./cifs/` by default, although this can be changed via the `cif_path` attribute.
-
-```python
-client.fetch_all_cifs()
-client.fetch_all_cifs(cif_path='/YOUR/CIF/PATH')
-```
