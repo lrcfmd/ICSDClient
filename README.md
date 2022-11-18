@@ -3,6 +3,16 @@ A python interface for accessing the ICSD API Client with the requests library. 
 
 Note that the ICSD internal database ID for each cif file is not the same as the ICSD collection code. A search must first be performed for a collection code (or list of collection codes) and then retrieved using the resultant IDs.
 
+## Setup
+
+Clone the repository to a local directory and install the dependencies (recommendation is inside a python virtual environment)
+
+```bash
+git clone https://github.com/lrcfmd/ICSDClient/
+cd ICSDClient
+pip install requirements.txt
+```
+
 ## Basic Usage 
 
 First instantiate a client object with the username and password provided by Fitz-Karlsruhe
