@@ -1,28 +1,44 @@
 import os
 import re
 import numpy as np 
-import datetime 
+import datetime
+import pandas as pd 
 
 import requests 
 from bs4 import BeautifulSoup
 
 def main():
+   
     client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
 
-    search_dict = {"collectioncode": "1-100"}
+    search_dict = {"collectioncode": "1-5000"}
 
-    search = client.advanced_search(search_dict)
-    cifs = client.fetch_cifs(search)
+    search = client.advanced_search(search_dict, 
+             property_list=["CollectionCode", "StructuredFormula","CalculatedDensity","MeasuredDensity","CellVolume"])
+    
+    data=[]
+    
+    for i,item in enumerate(search):  
+        data.append([int(item[0]),int(item[1][0]),item[1][1],item[1][2],item[1][3],item[1][4]])
+    
+    
+    pd_data=pd.DataFrame(data,columns=['DB_id','Col_code','name','cal_density', 'meas_density','cellvolume'])
+    
+    pd_data.to_csv('densities.csv',index=True)
+            
 
-    x = client.search("Li O")
-    cifs = client.fetch_cifs(search)
+    # search_dict = {"collectioncode": "1-100"}
+
+    # search = client.advanced_search(search_dict)
+    # cifs = client.fetch_cifs(search)
+
+    # x = client.search("Li O")
+    # cifs = client.fetch_cifs(search)
 
     # client.fetch_all_cifs()
     
     # cif = client.fetch_cif(1)
     # client.writeout(cif)
-
-    client.writeout(cifs)
 
     client.logout()
 
@@ -135,7 +151,7 @@ class ICSDClient():
         
         return list(zip(search_results, compositions))
 
-    def advanced_search(self, search_dict, search_type="and",  property_list=["CollectionCode", "StructuredFormula"]):
+    def advanced_search(self, search_dict, search_type="or",  property_list=["CollectionCode", "StructuredFormula"]):
         for k, v in search_dict.items():
             if k not in self.search_dict:
                 return f"Invalid search term {k} in search dict. Call client.search_dict.keys() to see available search terms"
@@ -186,7 +202,8 @@ class ICSDClient():
 
             return_responses = []
             for i, chunk in enumerate(chunked_ids):
-                return_responses.append(self.fetch_data(chunk))
+                return_responses.append(self.fetch_data(chunk, 
+                                                        property_list=property_list))
                 
                 if i % 2 == 0:
                     self.logout(verbose=False)
