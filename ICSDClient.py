@@ -13,10 +13,11 @@ from bs4 import BeautifulSoup
 
 def main():
     def test(cli):
-        search_string = {"numberofelements": "1", 'composition': 'Fe'}
+        search_string = "numberofelements: 1 and composition: Fe"
         ids = cli.search(search_string)
         print(len(ids))
-        cli.data_to_csv(ids[0])
+        cli.data_to_csv(ids)
+        # cli.fetch_cifs(ids)
         # success, data = next(gen) # unpack generator
         # print(f'successful?: {success}')
         # print(data)
@@ -90,7 +91,20 @@ class ICSDHelper:
     def __exit__(self, exc_type, exc_value, exc_traceback):
         self.close_connection()
 
-    def search(self, search_dict, search_type="and"):
+    def search(self, search_string):
+        if self.token:
+            try:
+                ids = self.query_mgr.advanced_search(self.token, search_string)
+            except ConnectionError as e:
+                self.connect() # second attempt since stored token was rejected.
+                ids = self.query_mgr.advanced_search(self.token, search_string)
+        else:
+            with self.temp_connection() as auth_token:
+                ids = self.query_mgr.advanced_search(self.token, search_string)
+            
+        return ids
+
+    def build_search_string(self, search_dict, search_type='or'):
         for k, v in search_dict.items():
             if k not in self.search_dict:
                 return f"Invalid search term {k} in search dict. Call client.search_dict.keys() to see available search terms"
@@ -99,8 +113,7 @@ class ICSDHelper:
                 search_dict.pop(k)
 
         search_string = f" {search_type} ".join([f"{str(k)} : {str(v)}" for k, v in search_dict.items()])
-
-        return self.query_mgr.advanced_search(self.token, search_string)
+        return search_string
 
     def fetch_cifs(self, ids):
         def fetch_cif_batch(ids):            
@@ -432,24 +445,12 @@ class ICSDClient:
         else:
             raise Exception('Failed to get cifs.')    
 
-    # TODO move out
-    def fetch_all_cifs(self, auth_token, cif_path="./cifs/"):
-        for x in range(0, 1000000, 500):
-            self.logout(auth_token, verbose=False)
-            self.authorize(verbose=False) 
-
-            print(f"{x}-{x+499}")
-            search_res = self.advanced_search(auth_token, {"collectioncode": f"{x}-{x+499}"})
-
-            cifs = self.fetch_cifs(auth_token, search_res)
-
-            try:
-                print(cifs[0])
-                print(cifs[-1])
-            except:
-                print("\n\nNO CIFS RETURNED, LAST RESPONSE:\n")
-                print(self.session_history[-1].content)
-                
+def fetch_all_cifs(self, auth_token, cif_path="./cifs/"):
+    max_coll_code = 1_000_000
+    with ICSDHelper() as cli:
+        search_string = f"collectioncode=0-{max_coll_code}"
+        ids = cli.search(search_string)
+        for success, cifs in cli.fetch_cifs(ids):
             self.writeout(cifs, cif_path)
 
 
