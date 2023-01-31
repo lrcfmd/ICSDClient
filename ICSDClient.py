@@ -6,44 +6,56 @@ import pandas as pd
 from contextlib import contextmanager
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor, as_completed
+from csv import DictWriter
 
 import requests 
 from bs4 import BeautifulSoup
 
 def main():
-   
-    client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
+    def test(cli):
+        search_string = {"numberofelements": "1", 'composition': 'Fe'}
+        ids = cli.search(search_string)
+        print(len(ids))
+        cli.data_to_csv(ids[0])
+        # success, data = next(gen) # unpack generator
+        # print(f'successful?: {success}')
+        # print(data)
 
-    search_dict = {"collectioncode": "1-5000"}
+    with ICSDHelper('AVV9002682', 'icsd590') as cli:
+        test(cli)   
 
-    search = client.advanced_search(search_dict, 
-             property_list=["CollectionCode", "StructuredFormula","CalculatedDensity","MeasuredDensity","CellVolume"])
+    # client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
+
+    # search_dict = {"collectioncode": "1-5000"}
+
+    # search = client.advanced_search(search_dict, 
+    #          property_list=["CollectionCode", "StructuredFormula","CalculatedDensity","MeasuredDensity","CellVolume"])
     
-    data=[]
+    # data=[]
     
-    for i,item in enumerate(search):  
-        data.append([int(item[0]),int(item[1][0]),item[1][1],item[1][2],item[1][3],item[1][4]])
+    # for i,item in enumerate(search):  
+    #     data.append([int(item[0]),int(item[1][0]),item[1][1],item[1][2],item[1][3],item[1][4]])
     
     
-    pd_data=pd.DataFrame(data,columns=['DB_id','Col_code','name','cal_density', 'meas_density','cellvolume'])
+    # pd_data=pd.DataFrame(data,columns=['DB_id','Col_code','name','cal_density', 'meas_density','cellvolume'])
     
-    pd_data.to_csv('densities.csv',index=True)
+    # pd_data.to_csv('densities.csv',index=True)
             
 
-    # search_dict = {"collectioncode": "1-100"}
+    # # search_dict = {"collectioncode": "1-100"}
 
-    # search = client.advanced_search(search_dict)
-    # cifs = client.fetch_cifs(search)
+    # # search = client.advanced_search(search_dict)
+    # # cifs = client.fetch_cifs(search)
 
-    # x = client.search("Li O")
-    # cifs = client.fetch_cifs(search)
+    # # x = client.search("Li O")
+    # # cifs = client.fetch_cifs(search)
 
-    # client.fetch_all_cifs()
+    # # client.fetch_all_cifs()
     
-    # cif = client.fetch_cif(1)
-    # client.writeout(cif)
+    # # cif = client.fetch_cif(1)
+    # # client.writeout(cif)
 
-    client.logout()
+    # client.logout()
 
 class ICSDHelper:
     MAX_CIFS = 500
@@ -51,7 +63,7 @@ class ICSDHelper:
     def __init__(self, id, pwd, verbose=False):
         self.id = id
         self.pwd = pwd
-        self.query_mgr = ICSDClient()
+        self.query_mgr = ICSDClient(verbose)
         self.token = None
         self.verbose = verbose
         self.search_dict = self.load_search_dict()
@@ -110,6 +122,57 @@ class ICSDHelper:
                 except Exception as e:
                     yield False, ids 
 
+    def fetch_data(self, ids, property_list=None):
+        def fetch_data_batch(ids, batch_idx):
+            query = partial(
+                self.query_mgr.fetch_data,
+                property_list=property_list)
+
+            with self.temp_connection() as auth_token:
+                return query(auth_token, ids, batch_idx)
+
+        batched_ids = [ids[i: i + self.MAX_CIFS] for i in range(0, len(ids), self.MAX_CIFS)]
+        
+        if self.verbose: 
+            print(f'Fetching data for {len(ids)} items in {len(batched_ids)} batches.')        
+        
+        with ThreadPoolExecutor(max_workers=8) as exec:
+            fut_to_ids = {exec.submit(fetch_data_batch, batch, i + 1): batch for i, batch in enumerate(batched_ids)}
+            for future in as_completed(fut_to_ids):
+                ids = fut_to_ids[future]
+                try:
+                    result = future.result()
+                    yield True, result # result = header, data   
+                except Exception as e:
+                    yield False, ids
+
+    def data_to_csv(self, ids, output_folder='./output', output_file='icsd_data', columns=[]):
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+
+        with open(os.path.join(output_folder, output_file+'.csv'), "w", newline='') as f:
+            first = True
+            failed_ids = []
+            for success, result in self.fetch_data(ids, columns):
+                if success:
+                    csv_header, csv_data = result[0], result[1]
+                    if first:
+                        writer = DictWriter(f, fieldnames=csv_header)
+                        writer.writeheader()
+                        first = False
+                    for data in csv_data:
+                        line = dict(zip(csv_header, data))
+                        line['CollectionCode'] = str(line['CollectionCode']).zfill(6)
+                        writer.writerow(line)
+                else:
+                    failed_ids.extend(result)                    
+        
+        if failed_ids:
+            with open(f'{output_file}_failed_to_download_ids.txt', 'w') as f:
+                for id in failed_ids:
+                    f.write(id+'\n')    
+    
+    
     def load_search_dict(self):
         search_dict = {"AUTHORS" : None, # BIBLIOGRAPHY : Authors name for the main (first) reference Text
                 "ARTICLE" : None, #  BIBLIOGRAPHY : Title of article for the main (first) reference Text
@@ -161,10 +224,11 @@ class ICSDHelper:
 class ICSDClient:
     STATUS_OK = 200
 
-    def __init__(self, windows_client=False, timeout=15):
+    def __init__(self, verbose=False, windows_client=False, timeout=15):
         self.session_history = []
         self.windows_client = windows_client
         self.timeout = timeout
+        self.verbose = verbose
 
     def authorize(self, id, pwd, verbose=True):
         data = {"loginid": id,
@@ -259,7 +323,6 @@ class ICSDClient:
         return list(zip(search_results, compositions))
 
     def advanced_search(self, auth_token, search_string):
-    # ,  property_list=["CollectionCode", "StructuredFormula"]):
         params = (
             ('query', search_string),
             ('content type', "EXPERIMENTAL_INORGANIC"),
@@ -282,13 +345,9 @@ class ICSDClient:
         soup = BeautifulSoup(response.content, features="xml")
         search_results = soup.idnums.contents[0].split(" ")
         return search_results
-        # search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
 
-        # properties = self.fetch_data(search_results, property_list=property_list)
-        
-        # return list(zip(search_results, properties))
 
-    def fetch_data(self, auth_token, ids, property_list=["CollectionCode", "StructuredFormula"]):
+    def fetch_data(self, auth_token, ids, batch_idx=1, property_list = None):
         """
         Available properties: CollectionCode, HMS, StructuredFormula, StructureType, 
         Title, Authors, Reference, CellParameter, ReducedCellParameter, StandardizedCellParameter, 
@@ -297,47 +356,33 @@ class ICSDClient:
         CalculatedDensity, MeasuredDensity, PearsonSymbol, WyckoffSequence, Journal, 
         Volume, PublicationYear, Page, Quality
         """
-        if len(ids) > 500:
-            chunked_ids = np.array_split(ids, np.ceil(len(ids)/500))
+        def format_response(response):
+            output = response.content.decode("UTF-8")
+            header, *data = output.split('\n')
+            header = header.split()
+            if len(data) > 0 and data[-1] == '': # output ending with \n creates an empty entry after split('\n')
+                data.pop()
+            data = [line.split('\t') for line in data]
+            self.session_history.append({str(ids): data})
+            return header, data  
 
-            return_responses = []
-            for i, chunk in enumerate(chunked_ids):
-                return_responses.append(self.fetch_data(chunk, 
-                                                        property_list=property_list))
-                
-                if i % 2 == 0:
-                    self.logout(auth_token, verbose=False)
-                    self.authorize(verbose=False) # TODO fails
-
-            flattened = [item for sublist in return_responses for item in sublist]
-
-            return flattened
+        if self.verbose:
+            print(f'Fetching data for {len(ids)} items (batch {batch_idx}).')        
 
         headers = {
             'accept': 'application/csv',
             'ICSD-Auth-Token': auth_token,
         }
-
-        params = (
+        if property_list is None: property_list = []
+        params = [
             ('idnum', ids),
-            ('windowsclient', self.windows_client),
-            ('listSelection', property_list),
-        )
+            ('windowsclient', False),
+            ('listSelection', ['CollectionCode', 'SumFormula', 'StructuredFormula'] + property_list)]
 
         response = requests.get('https://icsd.fiz-karlsruhe.de/ws/csv', headers=headers, params=params)
+        
+        return format_response(response)  
 
-        data = str(response.content).split("\\t\\n")[1:-1]
-
-        # If there's only a single response
-        if len(data) == 0 and len(ids) != 0:
-            data = str(response.content).split("\\t\\r\\n")[1:-1]
-
-        if len(property_list) > 1:
-            data = [x.split("\\t") for x in data]
-
-        self.session_history.append({str(ids): data})
-
-        return data
 
     def fetch_cif(self, auth_token, id):
         if auth_token is None:
