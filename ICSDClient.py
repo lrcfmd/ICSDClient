@@ -180,7 +180,7 @@ class ICSDClient():
 
         self.session_history.append({search_string: response})
 
-        soup = BeautifulSoup(response.content, "html.parser")
+        soup = BeautifulSoup(response.content, features="xml")
         search_results = soup.idnums.contents[0].split(" ")
         # search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
 
