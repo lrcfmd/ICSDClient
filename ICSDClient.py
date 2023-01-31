@@ -7,6 +7,8 @@ from contextlib import contextmanager
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from csv import DictWriter
+import zipfile
+import io
 
 import requests 
 from bs4 import BeautifulSoup
@@ -16,13 +18,14 @@ def main():
         search_string = "numberofelements: 1 and composition: Fe"
         ids = cli.search(search_string)
         print(len(ids))
-        cli.data_to_csv(ids)
+        # cli.data_to_csv(ids)
+        cli.cifs_to_zip(ids, 'test_search')
         # cli.fetch_cifs(ids)
         # success, data = next(gen) # unpack generator
         # print(f'successful?: {success}')
         # print(data)
 
-    with ICSDHelper('AVV9002682', 'icsd590') as cli:
+    with ICSDHelper('AVV9002682', 'icsd590', verbose=True) as cli:
         test(cli)   
 
     # client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
@@ -115,10 +118,15 @@ class ICSDHelper:
         search_string = f" {search_type} ".join([f"{str(k)} : {str(v)}" for k, v in search_dict.items()])
         return search_string
 
-    def fetch_cifs(self, ids):
-        def fetch_cif_batch(ids):            
+    def fetch_cifs(self, ids, zip=False, output_file='icsd'):
+        def fetch_cif_batch(ids, batch_idx):
+            query = partial(
+                self.query_mgr.fetch_cifs, 
+                zip = zip,
+                output_file = output_file)
+            
             with self.temp_connection() as auth_token:
-                return self.query_mgr.fetch_cifs(auth_token, ids)
+                return query(auth_token, ids, batch_idx)
         
         batched_ids = [ids[i: i + self.MAX_CIFS] for i in range(0, len(ids), self.MAX_CIFS)]
         
@@ -126,14 +134,46 @@ class ICSDHelper:
             print(f'Fetching {len(ids)} cifs in {len(batched_ids)} batches.')
 
         with ThreadPoolExecutor(max_workers=8) as exec:
-            fut_to_ids = {exec.submit(fetch_cif_batch, batch): batch for i, batch in enumerate(batched_ids)}
+            fut_to_ids = {exec.submit(fetch_cif_batch, batch, i + 1): batch for i, batch in enumerate(batched_ids)}
             for future in as_completed(fut_to_ids): 
                 ids = fut_to_ids[future]
                 try: 
                     result = future.result()
                     yield True, result
                 except Exception as e:
+                    raise e
                     yield False, ids 
+
+    def cifs_to_zip(self, ids, output_folder='./output', output_file='icsd'):
+        def copy_all(from_zip, to_zip):
+            for fname in from_zip.namelist():
+                with from_zip.open(fname) as next_file:
+                    # file name is provided as ``output_file``_CollCode{ccode}.cif
+                    # extract {ccode} and fix length to 6 digits
+                    ccode = fname[len(output_file) + 9: -4] 
+                    ccode = f"{int(ccode):06}"
+                    bio = io.BytesIO(next_file.read())
+                    to_zip.writestr(f"{output_file}_{ccode}", bio.getvalue())  
+
+        if not os.path.exists(output_folder):
+            os.makedirs(output_folder)
+        results_file = os.path.join(output_folder, output_file+'_results.zip')
+        failed_file = os.path.join(output_folder, output_file+'_failed_to_download_ids.txt')
+
+        failed_ids = []
+        with zipfile.ZipFile(results_file, mode='w') as archive:
+        # with zipfile.ZipFile(f'{output_file}_results.zip', mode='w') as archive:
+            for success, result in self.fetch_cifs(ids, zip=True, output_file=output_file):
+                if success:
+                    with zipfile.ZipFile(io.BytesIO(result)) as zf1:
+                        copy_all(zf1, archive)
+                else:
+                    failed_ids.extend(result)
+                
+        if failed_ids:
+            with open(failed_file, 'w') as f:
+                for id in failed_ids:
+                    f.write(id+'\n')
 
     def fetch_data(self, ids, property_list=None):
         def fetch_data_batch(ids, batch_idx):
@@ -418,32 +458,43 @@ class ICSDClient:
 
         return response.content.decode("UTF-8").strip()
 
-    def fetch_cifs(self, auth_token, ids):
+    def fetch_cifs(self, auth_token, ids, batch_idx = 1, zip = False, output_file='icsd'):
         if auth_token is None:
             print("You are not authenticated, call client.authorize() first")
             return 
 
         if isinstance(ids[0], tuple):
             ids = [x[0] for x in ids]
-
+        
+        if self.verbose:
+            print(f'Fetching {len(ids)} cifs (batch {batch_idx}).')
+        
         headers = {
             'accept': 'application/cif',
             'ICSD-Auth-Token': auth_token,
         }
 
-        params = (
+        params = [
             ('idnum', ids),
             ('celltype', 'experimental'),
             ('windowsclient', self.windows_client),
-            ('filetype', 'cif'),
-        )
-
-        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/cif/multiple', headers=headers, params=params)
-        if response.status_code == self.STATUS_OK:
-            cifs = response.content.decode("UTF-8").split('#(C)')[1:]
-            return ['#(C)'+cif for cif in cifs]
+        ]
+        if zip:
+            params.append(('filename', output_file))
+            params.append(('filetype', 'zip'))
+            response = requests.get('https://icsd.fiz-karlsruhe.de/ws/cif/multiple', headers=headers, params=params)
+            if response.status_code == self.STATUS_OK:
+                return response.content 
+            else:
+                raise Exception('Failed to get cifs.')
         else:
-            raise Exception('Failed to get cifs.')    
+            params.append(('filetype', 'cif'))
+            response = requests.get('https://icsd.fiz-karlsruhe.de/ws/cif/multiple', headers=headers, params=params)
+            if response.status_code == self.STATUS_OK:
+                cifs = response.content.decode("UTF-8").split('#(C)')[1:]                
+                return ['#(C)'+cif for cif in cifs]
+            else:
+                raise Exception('Failed to get cifs.')
 
 def fetch_all_cifs(self, auth_token, cif_path="./cifs/"):
     max_coll_code = 1_000_000
