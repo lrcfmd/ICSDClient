@@ -429,21 +429,58 @@ class ICSDClient:
                 raise Exception('Failed to get cifs.')
 
 
-def main():
-    def fetch_all_cifs(self, auth_token, cif_path="./cifs/"):
-        max_coll_code = 1_000_000
-        with ICSDHelper() as cli:
-            search_string = f"collectioncode=0-{max_coll_code}"
-            ids = cli.search(search_string)
-            cli.cifs_to_zip(ids, 'test_search')
 
-    def test(cli):
-        search_string = "numberofelements: 1 and composition: Fe"
+# examples
+def test(cli: ICSDHelper):
+    search_string = "numberofelements: 1 and composition: Fe"
+    ids = cli.search(search_string)
+    print(len(ids))
+    cli.data_to_csv(ids)
+    cli.cifs_to_zip(ids, 'test_search')
+
+def fetch_all_cifs():
+    max_coll_code = 1_000_000
+    search_string = f"collectioncode=0-{max_coll_code}"
+    with ICSDHelper() as cli:
         ids = cli.search(search_string)
-        print(len(ids))
-        cli.data_to_csv(ids)
         cli.cifs_to_zip(ids, 'test_search')
 
+def intermetallics(cli: ICSDHelper):
+    non_metals = {'H', 'D', 'T', 'He', 
+        'B', 'C', 'N', 'O', 'F', 'Ne', 
+        'Si', 'P', 'S', 'Cl', 'Ar', 
+        # 'Ge', 
+        'As', 'Se', 'Br', 'Kr',
+        # 'Sb',
+        'Te', 'I', 'Xe',
+        # 'Po',
+        'At', 'Rn',
+        'Ts', 'Og'}
+    
+    include_nm = ' or '.join([f'composition: {el}' for el in non_metals])
+    exclude_nm = 'not (' + include_nm + ')'
+    search_string = 'numberofelements: >=2 ' + exclude_nm
+    
+    ids = cli.search(search_string)
+    cli.data_to_csv(
+        ids, 
+        'intermetallics_data',
+        columns = ['StructuredFormula', 'ChemicalName'])
+    cli.cifs_to_zip(ids, 'intermetallics_search')
+
+def minerals(cli: ICSDHelper):
+    search_string = "mineralname: *"
+    search_string = 'numberofelements: >=2 and ' + search_string
+    
+    ids = cli.search(search_string)
+    cli.data_to_csv(
+        ids, 
+        'minerals_data2', 
+        columns = ['StructuredFormula', 'ChemicalName', 'MineralName', 'MineralGroup'])
+    cli.cifs_to_zip(ids, 'minerals_search2')
+
+
+def main():
     with ICSDHelper("YOUR USERNAME", "YOUR PASSWORD", verbose=True) as cli:
         test(cli)   
 
