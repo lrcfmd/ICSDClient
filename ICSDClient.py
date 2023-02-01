@@ -1,65 +1,13 @@
 import os
-import re
-import numpy as np 
-import datetime
-import pandas as pd 
 from contextlib import contextmanager
 from functools import partial
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from csv import DictWriter
 import zipfile
 import io
-
+from time import sleep
 import requests 
 from bs4 import BeautifulSoup
-
-def main():
-    def test(cli):
-        search_string = "numberofelements: 1 and composition: Fe"
-        ids = cli.search(search_string)
-        print(len(ids))
-        # cli.data_to_csv(ids)
-        cli.cifs_to_zip(ids, 'test_search')
-        # cli.fetch_cifs(ids)
-        # success, data = next(gen) # unpack generator
-        # print(f'successful?: {success}')
-        # print(data)
-
-    with ICSDHelper('AVV9002682', 'icsd590', verbose=True) as cli:
-        test(cli)   
-
-    # client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
-
-    # search_dict = {"collectioncode": "1-5000"}
-
-    # search = client.advanced_search(search_dict, 
-    #          property_list=["CollectionCode", "StructuredFormula","CalculatedDensity","MeasuredDensity","CellVolume"])
-    
-    # data=[]
-    
-    # for i,item in enumerate(search):  
-    #     data.append([int(item[0]),int(item[1][0]),item[1][1],item[1][2],item[1][3],item[1][4]])
-    
-    
-    # pd_data=pd.DataFrame(data,columns=['DB_id','Col_code','name','cal_density', 'meas_density','cellvolume'])
-    
-    # pd_data.to_csv('densities.csv',index=True)
-            
-
-    # # search_dict = {"collectioncode": "1-100"}
-
-    # # search = client.advanced_search(search_dict)
-    # # cifs = client.fetch_cifs(search)
-
-    # # x = client.search("Li O")
-    # # cifs = client.fetch_cifs(search)
-
-    # # client.fetch_all_cifs()
-    
-    # # cif = client.fetch_cif(1)
-    # # client.writeout(cif)
-
-    # client.logout()
 
 class ICSDHelper:
     MAX_CIFS = 500
@@ -106,6 +54,9 @@ class ICSDHelper:
                 ids = self.query_mgr.advanced_search(self.token, search_string)
             
         return ids
+    
+    def basic_search(self, query):
+        ids = self.query_mgr.search(self.token, query)
 
     def build_search_string(self, search_dict, search_type='or'):
         for k, v in search_dict.items():
@@ -141,7 +92,7 @@ class ICSDHelper:
                     result = future.result()
                     yield True, result
                 except Exception as e:
-                    raise e
+                    # raise e
                     yield False, ids 
 
     def cifs_to_zip(self, ids, output_folder='./output', output_file='icsd'):
@@ -162,7 +113,6 @@ class ICSDHelper:
 
         failed_ids = []
         with zipfile.ZipFile(results_file, mode='w') as archive:
-        # with zipfile.ZipFile(f'{output_file}_results.zip', mode='w') as archive:
             for success, result in self.fetch_cifs(ids, zip=True, output_file=output_file):
                 if success:
                     with zipfile.ZipFile(io.BytesIO(result)) as zf1:
@@ -275,6 +225,7 @@ class ICSDHelper:
         return {k.lower(): v for k, v in search_dict.items()}
 
 class ICSDClient:
+    url = 'https://icsd.fiz-karlsruhe.de/ws/'    
     STATUS_OK = 200
 
     def __init__(self, verbose=False, windows_client=False, timeout=15):
@@ -284,58 +235,38 @@ class ICSDClient:
         self.verbose = verbose
 
     def authorize(self, id, pwd, verbose=True):
-        data = {"loginid": id,
-                "password": pwd}
+        data = {"loginid": id, "password": pwd}
+        headers = {'accept': 'text/plain', 'Content-Type': 'application/x-www-form-urlencoded'}
 
-        headers = {
-            'accept': 'text/plain',
-            'Content-Type': 'application/x-www-form-urlencoded',
-        }
+        attempts = 1
+        while attempts <= 5: 
+            response = requests.post(self.url+'auth/login', headers=headers, data=data)
+            self.session_history.append(response)
 
-        response = requests.post('https://icsd.fiz-karlsruhe.de/ws/auth/login', 
-                                 headers=headers, 
-                                 data=data)
-        
-        self.session_history.append(response)
-
-        if response.status_code == self.STATUS_OK:
-            token = response.headers['ICSD-Auth-Token']
-            if verbose: print(f"Authentication succeeded. Your Auth Token for this session is {token} which will expire in one hour.")
-            return token
+            if response.status_code == self.STATUS_OK:
+                token = response.headers['ICSD-Auth-Token']
+                if self.verbose:
+                    print(f'Login successful. auth token: {token}.')
+                return token
+            else: # try again -- TODO should depend on reason for failure
+                sleep(0.1)
+                if self.verbose:
+                    print(f'Login attempt {attempts} failed.')
+                attempts += 1
         else:
-            if verbose: print(response.content)
-        
-    def logout(self, auth_token, verbose=True):
-        headers = {
-            'accept': 'text/plain',
-            'ICSD-Auth-Token': auth_token,
-        }
+            if self.verbose:
+                print('Login failed.')
 
-        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/auth/logout', headers=headers)
-        if verbose: print(response.content)
+    def logout(self, auth_token, verbose=True):
+        headers = {'accept': 'text/plain', 'ICSD-Auth-Token': auth_token,}
+
+        response = requests.get(self.url+'auth/logout', headers=headers)
+        if self.verbose: 
+            print(f'Logout using token {auth_token}. Status: {response.status_code}: {response.content.decode("UTF-8")}.')
 
         self.session_history.append(response)
 
         return response
-
-    def writeout(self, cifs, folder="./cifs/"):
-        if not os.path.exists(folder):
-            os.makedirs(folder)
-
-        if not isinstance(cifs, list):
-            if cifs is None:
-                print("Requires a valid cif string, this string is None. Ensure download was successful")
-                return 
-                
-            cifs = [cifs]
-        
-        for cif in cifs:
-            icsd_code = re.search(r"_database_code_ICSD ([0-9]+)", cif).group(1)
-            filename = f"icsd_{int(icsd_code):06}.cif"
-
-            with open(os.path.join(folder, filename), "w") as f:
-                for line in cif.splitlines():
-                    f.write(line + "\n")
 
     def search(self, auth_token, searchTerm, content_type=None):
         '''
@@ -362,7 +293,7 @@ class ICSDClient:
             'ICSD-Auth-Token': auth_token,
         }
 
-        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/search/simple', 
+        response = requests.get(self.url+'search/simple', 
                                 headers=headers, 
                                 params=params,
                                 timeout=self.timeout)
@@ -376,29 +307,35 @@ class ICSDClient:
         return list(zip(search_results, compositions))
 
     def advanced_search(self, auth_token, search_string):
-        params = (
-            ('query', search_string),
-            ('content type', "EXPERIMENTAL_INORGANIC"),
-        )
+        def format_response(response):
+            return_data = BeautifulSoup(response.content, features="xml")
+            try: ret = return_data.idnums.contents[0].split(" ")
+            except IndexError: ret = return_data.idnums.contents
+            if self.verbose:
+                print(f'Search returned {len(ret)} values.')
+            return ret
+        
+        if self.verbose:
+            print(f'Performing search {search_string}.')
+        
+        params = (('query', search_string),('content type', "EXPERIMENTAL_INORGANIC"))
+        headers = {'accept': 'application/xml', 'ICSD-Auth-Token': auth_token}
 
-        headers = {
-            'accept': 'application/xml',
-            'ICSD-Auth-Token': auth_token,
-        }
-
-        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/search/expert', 
+        response = requests.get(self.url+'search/expert', 
                                 headers=headers, 
                                 params=params,
                                 timeout=self.timeout)
 
-        # TODO add exception handling for timeouts 
-
         self.session_history.append({search_string: response})
 
-        soup = BeautifulSoup(response.content, features="xml")
-        search_results = soup.idnums.contents[0].split(" ")
-        return search_results
-
+        # TODO add exception handling for timeouts 
+        if response.status_code == self.STATUS_OK:
+            return format_response(response)
+        else:
+            if response.status_code == self.STATUS_NOAUTH:
+                raise ConnectionError('Authenication token {auth_token} refused.')
+            if self.verbose:
+                print(f'Search failed. Status code {response.status_code}')  
 
     def fetch_data(self, auth_token, ids, batch_idx=1, property_list = None):
         """
@@ -422,18 +359,15 @@ class ICSDClient:
         if self.verbose:
             print(f'Fetching data for {len(ids)} items (batch {batch_idx}).')        
 
-        headers = {
-            'accept': 'application/csv',
-            'ICSD-Auth-Token': auth_token,
-        }
+        headers = {'accept': 'application/csv', 'ICSD-Auth-Token': auth_token}
+        
         if property_list is None: property_list = []
         params = [
             ('idnum', ids),
-            ('windowsclient', False),
+            ('windowsclient', self.windows_client),
             ('listSelection', ['CollectionCode', 'SumFormula', 'StructuredFormula'] + property_list)]
 
-        response = requests.get('https://icsd.fiz-karlsruhe.de/ws/csv', headers=headers, params=params)
-        
+        response = requests.get(self.url+'csv', headers=headers, params=params)
         return format_response(response)  
 
 
@@ -452,7 +386,7 @@ class ICSDClient:
             ('windowsclient', self.windows_client),
         )
         
-        response = requests.get(f'https://icsd.fiz-karlsruhe.de/ws/cif/{id}', headers=headers, params=params)
+        response = requests.get(f'{self.url}{id}', headers=headers, params=params)
         
         self.session_history.append({id: response})
 
@@ -469,41 +403,49 @@ class ICSDClient:
         if self.verbose:
             print(f'Fetching {len(ids)} cifs (batch {batch_idx}).')
         
-        headers = {
-            'accept': 'application/cif',
-            'ICSD-Auth-Token': auth_token,
-        }
+        headers = {'accept': 'application/cif', 'ICSD-Auth-Token': auth_token}
 
         params = [
             ('idnum', ids),
             ('celltype', 'experimental'),
             ('windowsclient', self.windows_client),
         ]
+
         if zip:
             params.append(('filename', output_file))
             params.append(('filetype', 'zip'))
-            response = requests.get('https://icsd.fiz-karlsruhe.de/ws/cif/multiple', headers=headers, params=params)
+            response = requests.get(self.url+'cif/multiple', headers=headers, params=params)
             if response.status_code == self.STATUS_OK:
                 return response.content 
             else:
                 raise Exception('Failed to get cifs.')
         else:
             params.append(('filetype', 'cif'))
-            response = requests.get('https://icsd.fiz-karlsruhe.de/ws/cif/multiple', headers=headers, params=params)
+            response = requests.get(self.url+'cif/multiple', headers=headers, params=params)
             if response.status_code == self.STATUS_OK:
                 cifs = response.content.decode("UTF-8").split('#(C)')[1:]                
                 return ['#(C)'+cif for cif in cifs]
             else:
                 raise Exception('Failed to get cifs.')
 
-def fetch_all_cifs(self, auth_token, cif_path="./cifs/"):
-    max_coll_code = 1_000_000
-    with ICSDHelper() as cli:
-        search_string = f"collectioncode=0-{max_coll_code}"
-        ids = cli.search(search_string)
-        for success, cifs in cli.fetch_cifs(ids):
-            self.writeout(cifs, cif_path)
 
+def main():
+    def fetch_all_cifs(self, auth_token, cif_path="./cifs/"):
+        max_coll_code = 1_000_000
+        with ICSDHelper() as cli:
+            search_string = f"collectioncode=0-{max_coll_code}"
+            ids = cli.search(search_string)
+            cli.cifs_to_zip(ids, 'test_search')
+
+    def test(cli):
+        search_string = "numberofelements: 1 and composition: Fe"
+        ids = cli.search(search_string)
+        print(len(ids))
+        cli.data_to_csv(ids)
+        cli.cifs_to_zip(ids, 'test_search')
+
+    with ICSDHelper("YOUR USERNAME", "YOUR PASSWORD", verbose=True) as cli:
+        test(cli)   
 
 if __name__ == "__main__":
     main()
