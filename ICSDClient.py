@@ -20,20 +20,23 @@ class ICSDHelper:
         self.verbose = verbose
         self.search_dict = self.load_search_dict()
 
-    def connect(self):        
+    def connect(self):
         self.token = self.query_mgr.authorize(self.id, self.pwd)
     
     def close_connection(self):
-        self.query_mgr.logout(self.token)
+        if self.token:
+            self.query_mgr.logout(self.token)
         self.token = None
 
     @contextmanager
     def temp_connection(self):
+        token = None
         try:
             token = self.query_mgr.authorize(self.id, self.pwd)
             yield token
         finally:
-            self.query_mgr.logout(token)
+            if token:
+                self.query_mgr.logout(token)
 
     def __enter__(self):
         self.connect()
@@ -46,7 +49,7 @@ class ICSDHelper:
         if self.token:
             try:
                 ids = self.query_mgr.advanced_search(self.token, search_string)
-            except ConnectionError as e:
+            except ConnectionRefusedError as e:
                 self.connect() # second attempt since stored token was rejected.
                 ids = self.query_mgr.advanced_search(self.token, search_string)
         else:
@@ -227,6 +230,7 @@ class ICSDHelper:
 class ICSDClient:
     url = 'https://icsd.fiz-karlsruhe.de/ws/'    
     STATUS_OK = 200
+    STATUS_NOAUTH = 401
 
     def __init__(self, verbose=False, windows_client=False, timeout=15):
         self.session_history = []
@@ -254,15 +258,14 @@ class ICSDClient:
                     print(f'Login attempt {attempts} failed.')
                 attempts += 1
         else:
-            if self.verbose:
-                print('Login failed.')
+            raise ConnectionRefusedError(f'Unable to log in with id {id} and password {pwd}.')
 
     def logout(self, auth_token, verbose=True):
         headers = {'accept': 'text/plain', 'ICSD-Auth-Token': auth_token,}
 
         response = requests.get(self.url+'auth/logout', headers=headers)
         if self.verbose: 
-            print(f'Logout using token {auth_token}. Status: {response.status_code}: {response.content.decode("UTF-8")}.')
+            print(f'Logout using token {auth_token}. Status: {response.status_code}, {response.content.decode("UTF-8")}.')
 
         self.session_history.append(response)
 
@@ -333,7 +336,7 @@ class ICSDClient:
             return format_response(response)
         else:
             if response.status_code == self.STATUS_NOAUTH:
-                raise ConnectionError('Authenication token {auth_token} refused.')
+                raise ConnectionRefusedError('Authenication token {auth_token} refused.')
             if self.verbose:
                 print(f'Search failed. Status code {response.status_code}')  
 
@@ -434,7 +437,6 @@ class ICSDClient:
 def test(cli: ICSDHelper):
     search_string = "numberofelements: 1 and composition: Fe"
     ids = cli.search(search_string)
-    print(len(ids))
     cli.data_to_csv(ids)
     cli.cifs_to_zip(ids, 'test_search')
 
