@@ -8,7 +8,7 @@ Clone the repository to a local directory and install the dependencies (recommen
 ```bash
 git clone https://github.com/lrcfmd/ICSDClient/
 cd ICSDClient
-pip install requirements.txt
+pip install -r requirements.txt
 ```
 
 ## Basic Usage 
