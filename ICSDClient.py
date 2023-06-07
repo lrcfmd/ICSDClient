@@ -8,7 +8,6 @@ import requests
 from bs4 import BeautifulSoup
 
 def main():
-   
     client = ICSDClient("YOUR_USERNAME", "YOUR_PASSWORD")
 
     search_dict = {"collectioncode": "1-5000"}
@@ -113,7 +112,7 @@ class ICSDClient():
                 for line in cif.splitlines():
                     f.write(line + "\n")
 
-    def search(self, searchTerm, content_type=None):
+    def search(self, searchTerm, content_type="EXPERIMENTAL_INORGANIC"):
         '''
         Available content EXPERIMENTAL_INORGANIC, EXPERIMENTAL_METALORGANIC, THERORETICAL_STRUCTURES
         '''
@@ -124,7 +123,7 @@ class ICSDClient():
         if content_type is None:
             params = (
                 ('query', searchTerm),
-                ('content type', "EXPERIMENTAL_INORGANIC"),
+                ('content type', content_type),
             )
 
         else: 
@@ -151,7 +150,11 @@ class ICSDClient():
         
         return list(zip(search_results, compositions))
 
-    def advanced_search(self, search_dict, search_type="or",  property_list=["CollectionCode", "StructuredFormula"]):
+    def advanced_search(self, 
+                        search_dict, 
+                        search_type="or",  
+                        property_list=["CollectionCode", "StructuredFormula"], 
+                        content_type="EXPERIMENTAL_INORGANIC"):
         for k, v in search_dict.items():
             if k not in self.search_dict:
                 return f"Invalid search term {k} in search dict. Call client.search_dict.keys() to see available search terms"
@@ -163,7 +166,7 @@ class ICSDClient():
 
         params = (
             ('query', search_string),
-            ('content type', "EXPERIMENTAL_INORGANIC"),
+            ('content type', content_type),
         )
 
         headers = {
@@ -181,6 +184,10 @@ class ICSDClient():
         self.session_history.append({search_string: response})
 
         soup = BeautifulSoup(response.content, "html.parser")
+        
+        if "<idnums></idnums>" in str(soup):
+            return []
+        
         search_results = soup.idnums.contents[0].split(" ")
         # search_results = [x for x in str(response.content).split("idnums")[1].split(" ")[1:-2]]
 
@@ -264,7 +271,10 @@ class ICSDClient():
         if self.auth_token is None:
             print("You are not authenticated, call client.authorize() first")
             return 
-
+        
+        if len(ids) == 0:
+            return []
+        
         if isinstance(ids[0], tuple):
             ids = [x[0] for x in ids]
 
@@ -308,22 +318,21 @@ class ICSDClient():
             
         return cifs
 
-    def fetch_all_cifs(self, cif_path="./cifs/"):
+    def fetch_all_cifs(self, cif_path="./cifs/", content_type="EXPERIMENTAL_INORGANIC"):
         for x in range(0, 1000000, 500):
             self.logout(verbose=False)
             self.authorize(verbose=False)
 
             print(f"{x}-{x+499}")
-            search_res = self.advanced_search({"collectioncode": f"{x}-{x+499}"})
+            search_res = self.advanced_search({"collectioncode": f"{x}-{x+499}"}, content_type=content_type)
 
             cifs = self.fetch_cifs(search_res)
 
             try:
-                print(cifs[0])
-                print(cifs[-1])
+                x = cifs[-1]
             except:
-                print("\n\nNO CIFS RETURNED, LAST RESPONSE:\n")
-                print(self.session_history[-1].content)
+                print("\nNo CIFs returned in this range, last response:\n")
+                print(self.session_history[-1])
                 
             self.writeout(cifs, cif_path)
 
